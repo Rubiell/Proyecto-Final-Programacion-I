@@ -1,1 +1,372 @@
 
+using System;
+using System.Text.RegularExpressions;
+using System.Windows.Forms;
+
+namespace GestorTorneosLocales
+{
+    public partial class Form1 : Form
+    {
+        // Objeto principal que administra todo el torneo
+        private Torneo torneo;
+
+        // Solo letras (con acentos/ñ), números y espacios para el nombre del equipo
+        private static readonly Regex PatronNombreEquipo = new Regex(@"^[A-Za-zÁÉÍÓÚÑÜáéíóúñü0-9 ]+$");
+
+        // Solo letras (con acentos/ñ) y espacios para el nombre del capitán (es un nombre de persona)
+        private static readonly Regex PatronNombreCapitan = new Regex(@"^[A-Za-zÁÉÍÓÚÑÜáéíóúñü ]+$");
+
+        public Form1()
+        {
+            InitializeComponent();
+        }
+
+        private void Form1_Load(object sender, EventArgs e)
+        {
+            torneo = new Torneo("Torneo Local FC 26");
+
+            // Configuración de columnas del DataGridView de equipos
+            dgvEquipos.Columns.Add("colEquipo", "Equipo");
+            dgvEquipos.Columns.Add("colCapitan", "Capitán");
+            dgvEquipos.Columns.Add("colPJ", "PJ");
+            dgvEquipos.Columns.Add("colPG", "PG");
+            dgvEquipos.Columns.Add("colPE", "PE");
+            dgvEquipos.Columns.Add("colPP", "PP");
+            dgvEquipos.Columns.Add("colGF", "GF");
+            dgvEquipos.Columns.Add("colGC", "GC");
+            dgvEquipos.Columns.Add("colPTS", "Pts");
+            dgvEquipos.ReadOnly = true;
+            dgvEquipos.AllowUserToAddRows = false;
+
+            // Configuración de columnas del DataGridView de partidos
+            dgvPartidos.Columns.Add("colLocal", "Local");
+            dgvPartidos.Columns.Add("colVisitante", "Visitante");
+            dgvPartidos.Columns.Add("colGolesLocal", "G.Local");
+            dgvPartidos.Columns.Add("colGolesVisitante", "G.Visit");
+            dgvPartidos.Columns.Add("colEstado", "Estado");
+            dgvPartidos.ReadOnly = true;
+            dgvPartidos.AllowUserToAddRows = false;
+
+            EstilizarGrid(dgvEquipos);
+            EstilizarGrid(dgvPartidos);
+
+            lblMensaje.Text = "";
+
+            // Al iniciar no hay equipos, así que la sección de partidos empieza deshabilitada
+            ActualizarEstadoControles();
+        }
+
+        // Da formato limpio a un DataGridView (encabezados, colores, ancho de columnas)
+        private void EstilizarGrid(DataGridView dgv)
+        {
+            dgv.RowHeadersVisible = false;
+            dgv.BackgroundColor = System.Drawing.Color.White;
+            dgv.BorderStyle = BorderStyle.FixedSingle;
+            dgv.GridColor = System.Drawing.Color.Gainsboro;
+            dgv.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
+            dgv.EnableHeadersVisualStyles = false;
+            dgv.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+            dgv.MultiSelect = false;
+            dgv.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+
+            dgv.ColumnHeadersDefaultCellStyle.BackColor = System.Drawing.Color.FromArgb(31, 56, 100);
+            dgv.ColumnHeadersDefaultCellStyle.ForeColor = System.Drawing.Color.White;
+            dgv.ColumnHeadersDefaultCellStyle.Font = new System.Drawing.Font(dgv.Font, System.Drawing.FontStyle.Bold);
+            dgv.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
+            dgv.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
+            dgv.ColumnHeadersHeight = 32;
+
+            dgv.DefaultCellStyle.BackColor = System.Drawing.Color.White;
+            dgv.DefaultCellStyle.SelectionBackColor = System.Drawing.Color.FromArgb(210, 225, 245);
+            dgv.DefaultCellStyle.SelectionForeColor = System.Drawing.Color.Black;
+            dgv.AlternatingRowsDefaultCellStyle.BackColor = System.Drawing.Color.FromArgb(234, 240, 246);
+        }
+
+        // Habilita o deshabilita la sección de partidos según haya suficientes equipos registrados
+        private void ActualizarEstadoControles()
+        {
+            bool haySuficientesEquipos = torneo.ListaEquipos.Count >= 2;
+
+            cbEquipoLocal.Enabled = haySuficientesEquipos;
+            cbEquipoVisitante.Enabled = haySuficientesEquipos;
+            txtGolesLocal.Enabled = haySuficientesEquipos;
+            txtGolesVisitante.Enabled = haySuficientesEquipos;
+            btnGuardarResultado.Enabled = haySuficientesEquipos;
+            btnGenerarCalendario.Enabled = haySuficientesEquipos;
+            btnActualizarTabla.Enabled = torneo.ListaEquipos.Count > 0;
+        }
+
+        // Evento: Registrar un nuevo equipo en el torneo
+        private void btnAgregarEquipo_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(txtNombreEquipo.Text))
+                {
+                    throw new ArgumentException("El nombre del equipo es obligatorio.");
+                }
+                if (!PatronNombreEquipo.IsMatch(txtNombreEquipo.Text.Trim()))
+                {
+                    throw new ArgumentException("El nombre del equipo solo puede contener letras, números y espacios (sin símbolos ni comillas).");
+                }
+                if (string.IsNullOrWhiteSpace(txtCapitan.Text))
+                {
+                    throw new ArgumentException("El nombre del capitán es obligatorio.");
+                }
+                if (!PatronNombreCapitan.IsMatch(txtCapitan.Text.Trim()))
+                {
+                    throw new ArgumentException("El nombre del capitán solo puede contener letras y espacios (sin números, símbolos ni comillas).");
+                }
+
+                string nombreEquipoLimpio = Regex.Replace(txtNombreEquipo.Text.Trim(), @"\s+", " ");
+                string nombreCapitanLimpio = Regex.Replace(txtCapitan.Text.Trim(), @"\s+", " ");
+
+                Equipo nuevoEquipo = new Equipo(nombreEquipoLimpio, nombreCapitanLimpio);
+                torneo.AgregarEquipo(nuevoEquipo);
+
+                RefrescarEquipos();
+                RefrescarComboEquipos();
+                ActualizarEstadoControles();
+
+                txtNombreEquipo.Clear();
+                txtCapitan.Clear();
+                txtNombreEquipo.Focus();
+
+                MostrarMensaje("Equipo agregado correctamente.", false);
+            }
+            catch (ArgumentException ex)
+            {
+                MostrarMensaje(ex.Message, true);
+            }
+            catch (InvalidOperationException ex)
+            {
+                MostrarMensaje(ex.Message, true);
+            }
+            catch (Exception ex)
+            {
+                MostrarMensaje("Error inesperado: " + ex.Message, true);
+            }
+        }
+
+        // Evento: Generar el calendario de partidos (todos contra todos)
+        private void btnGenerarCalendario_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                torneo.GenerarCalendario();
+                RefrescarPartidos();
+                MostrarMensaje("Calendario generado: " + torneo.ListaPartidos.Count + " partido(s).", false);
+            }
+            catch (InvalidOperationException ex)
+            {
+                MostrarMensaje(ex.Message, true);
+            }
+            catch (Exception ex)
+            {
+                MostrarMensaje("Error inesperado: " + ex.Message, true);
+            }
+        }
+
+        // Evento: Registrar el resultado de un partido
+        private void btnGuardarResultado_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                if (cbEquipoLocal.SelectedIndex < 0 || cbEquipoVisitante.SelectedIndex < 0)
+                {
+                    throw new ArgumentException("Debe seleccionar el equipo local y el equipo visitante.");
+                }
+                if (cbEquipoLocal.SelectedIndex == cbEquipoVisitante.SelectedIndex)
+                {
+                    throw new ArgumentException("El equipo local y el visitante no pueden ser el mismo.");
+                }
+
+                // Manejo de excepciones: goles en blanco o con letras (FormatException)
+                int golesLocal;
+                int golesVisitante;
+
+                if (!int.TryParse(txtGolesLocal.Text, out golesLocal))
+                {
+                    throw new FormatException("Los goles del equipo local deben ser un número entero.");
+                }
+                if (!int.TryParse(txtGolesVisitante.Text, out golesVisitante))
+                {
+                    throw new FormatException("Los goles del equipo visitante deben ser un número entero.");
+                }
+
+                Equipo local = (Equipo)cbEquipoLocal.SelectedItem;
+                Equipo visitante = (Equipo)cbEquipoVisitante.SelectedItem;
+
+                Partido partido = BuscarPartido(local, visitante);
+                if (partido == null)
+                {
+                    throw new InvalidOperationException("No existe ese enfrentamiento en el calendario. Genere el calendario primero.");
+                }
+                if (partido.PartidoFinalizado)
+                {
+                    throw new InvalidOperationException("Ese partido ya tiene un resultado registrado.");
+                }
+
+                partido.RegistrarResultado(golesLocal, golesVisitante);
+
+                RefrescarPartidos();
+                RefrescarEquipos();
+
+                txtGolesLocal.Clear();
+                txtGolesVisitante.Clear();
+
+                MostrarMensaje("Resultado guardado correctamente.", false);
+            }
+            catch (FormatException ex)
+            {
+                MostrarMensaje(ex.Message, true);
+            }
+            catch (ArgumentException ex)
+            {
+                MostrarMensaje(ex.Message, true);
+            }
+            catch (InvalidOperationException ex)
+            {
+                MostrarMensaje(ex.Message, true);
+            }
+            catch (Exception ex)
+            {
+                MostrarMensaje("Error inesperado: " + ex.Message, true);
+            }
+        }
+
+        // Evento: Actualizar la tabla de posiciones según los puntos obtenidos
+        private void btnActualizarTabla_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                torneo.ActualizarTablaPosiciones();
+                RefrescarEquipos();
+                MostrarMensaje("Tabla de posiciones actualizada.", false);
+            }
+            catch (Exception ex)
+            {
+                MostrarMensaje("Error inesperado: " + ex.Message, true);
+            }
+        }
+
+        // Evento: Reiniciar el torneo por completo sin cerrar el programa
+        private void btnReiniciarTorneo_Click(object sender, EventArgs e)
+        {
+            DialogResult respuesta = MessageBox.Show(
+                "Esto borrará todos los equipos, partidos y resultados registrados. ¿Desea continuar?",
+                "Reiniciar Torneo",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning);
+
+            if (respuesta != DialogResult.Yes)
+            {
+                return;
+            }
+
+            torneo = new Torneo("Torneo Local FC 26");
+
+            dgvEquipos.Rows.Clear();
+            dgvPartidos.Rows.Clear();
+            cbEquipoLocal.Items.Clear();
+            cbEquipoVisitante.Items.Clear();
+            txtNombreEquipo.Clear();
+            txtCapitan.Clear();
+            txtGolesLocal.Clear();
+            txtGolesVisitante.Clear();
+
+            ActualizarEstadoControles();
+            MostrarMensaje("Torneo reiniciado correctamente.", false);
+            txtNombreEquipo.Focus();
+        }
+
+        // ---------- Métodos de apoyo ----------
+
+        private Partido BuscarPartido(Equipo local, Equipo visitante)
+        {
+            foreach (Partido p in torneo.ListaPartidos)
+            {
+                bool coincideDirecto = (p.EquipoLocal == local && p.EquipoVisitante == visitante);
+                bool coincideInverso = (p.EquipoLocal == visitante && p.EquipoVisitante == local);
+
+                if (coincideDirecto || coincideInverso)
+                {
+                    return p;
+                }
+            }
+            return null;
+        }
+
+        private void RefrescarEquipos()
+        {
+            dgvEquipos.Rows.Clear();
+
+            foreach (Equipo eq in torneo.ListaEquipos)
+            {
+                dgvEquipos.Rows.Add(
+                    eq.NombreEquipo,
+                    eq.NombreCapitan,
+                    eq.PartidosJugados,
+                    eq.PartidosGanados,
+                    eq.PartidosEmpatados,
+                    eq.PartidosPerdidos,
+                    eq.GolesAFavor,
+                    eq.GolesEnContra,
+                    eq.PuntosTotales
+                );
+            }
+        }
+
+        private void RefrescarPartidos()
+        {
+            dgvPartidos.Rows.Clear();
+
+            foreach (Partido p in torneo.ListaPartidos)
+            {
+                string estado = p.PartidoFinalizado ? "Jugado" : "Pendiente";
+
+                dgvPartidos.Rows.Add(
+                    p.EquipoLocal.NombreEquipo,
+                    p.EquipoVisitante.NombreEquipo,
+                    p.PartidoFinalizado ? p.GolesLocal.ToString() : "-",
+                    p.PartidoFinalizado ? p.GolesVisitante.ToString() : "-",
+                    estado
+                );
+            }
+        }
+
+        private void RefrescarComboEquipos()
+        {
+            Equipo seleccionLocal = cbEquipoLocal.SelectedItem as Equipo;
+            Equipo seleccionVisitante = cbEquipoVisitante.SelectedItem as Equipo;
+
+            cbEquipoLocal.DisplayMember = "NombreEquipo";
+            cbEquipoVisitante.DisplayMember = "NombreEquipo";
+
+            cbEquipoLocal.Items.Clear();
+            cbEquipoVisitante.Items.Clear();
+
+            foreach (Equipo eq in torneo.ListaEquipos)
+            {
+                cbEquipoLocal.Items.Add(eq);
+                cbEquipoVisitante.Items.Add(eq);
+            }
+
+            // Restaurar la selección previa si el equipo sigue existiendo en la lista
+            if (seleccionLocal != null && cbEquipoLocal.Items.Contains(seleccionLocal))
+            {
+                cbEquipoLocal.SelectedItem = seleccionLocal;
+            }
+            if (seleccionVisitante != null && cbEquipoVisitante.Items.Contains(seleccionVisitante))
+            {
+                cbEquipoVisitante.SelectedItem = seleccionVisitante;
+            }
+        }
+
+        private void MostrarMensaje(string mensaje, bool esError)
+        {
+            lblMensaje.Text = mensaje;
+            lblMensaje.ForeColor = esError ? System.Drawing.Color.Red : System.Drawing.Color.Green;
+        }
+    }
+}
